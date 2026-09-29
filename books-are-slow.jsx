@@ -1,4 +1,4 @@
-// Books Are Slow — paper-and-clay stop-motion reel, 1080x1920, synced to the recorded voiceover.
+// Books Are Slow — paper-and-clay stop-motion reel, 1080x1920, with synced foley sound design (no voice, no music).
 // Drawing units: 180 x 320 (1 unit = 6 px). Table line at y=246.
 const { useComposition, CompositionStage, Captions, Easing, useTweaks, TweaksPanel, TweakSection, TweakToggle, TweakSlider } = window;
 
@@ -11,7 +11,8 @@ const C = {
   kraft: '#c9a46a', kraftD: '#9f7d48',
 };
 
-// Shot list — t0 is the shot's start in the voiceover (seconds). Names must match OM_SCENES.
+// Shot list — t0 is the shot's start on the original timing track (seconds). Names must match OM_SCENES.
+// The SFX cue sheet in tools/make_sfx.py uses the same times; rerun it after retiming.
 const SHOT_T0 = [
   ['01 Hook', 0], ['02 Ten-minute video', 4.22], ['03 Up to speed', 9.38], ['04a Makes sense', 13.21],
   ['04b Cannot teach it', 16.33], ['05 A book', 19.03], ['06a Same idea', 20.76], ['06b Example', 23.28],
@@ -21,6 +22,7 @@ const SHOT_T0 = [
 ];
 const VO_END = 72.76;
 const SHOT_DUR = SHOT_T0.map(([, t], i) => (i + 1 < SHOT_T0.length ? SHOT_T0[i + 1][1] : VO_END) - t);
+const SFX_TAIL = 1; // each SFX clip also covers the shot's 1s hold so tails ring out
 
 // ---------- motion ----------
 const cl = (v) => Math.max(0, Math.min(1, v));
@@ -214,7 +216,7 @@ function Reader({ id = 900, x, y, s = 1, pose = 'down', pose2, k = 0, look = 0, 
   );
 }
 
-// ---------- shots (u = voiceover-time, stepped) ----------
+// ---------- shots (u = track-time, stepped) ----------
 function S01({ u }) {
   const k = MOTION.draw(u, 0.19, 3.65);
   const ts = u - 0.85;
@@ -752,14 +754,14 @@ function Film({ tw, onBlocked }) {
   const { T, CUES, time, playing } = useComposition();
   const vrefs = React.useRef([]);
 
-  // each scene's voiceover clip plays from its cue; the 1s gap after it is silent
+  // each scene's SFX clip plays from its cue, through the 1s hold after the shot
   React.useEffect(() => {
     SHOT_T0.forEach(([nm], i) => {
       const v = vrefs.current[i]; if (!v) return;
-      const rel = time - CUES[nm], d = SHOT_DUR[i];
+      const rel = time - CUES[nm], d = SHOT_DUR[i] + SFX_TAIL;
       const active = rel >= 0 && rel < d;
       const target = Math.max(0, Math.min(rel, d));
-      if (active) window.__basVO = v;
+      if (active) window.__basSFX = v;
       if (playing && active) {
         if (Math.abs(v.currentTime - target) > .25) v.currentTime = target;
         if (v.paused) v.play().then(() => onBlocked(false)).catch(() => onBlocked(true));
@@ -825,8 +827,8 @@ function Film({ tw, onBlocked }) {
       {tw.captions && <Captions items={CAPS.map(([at, text], i) => ({ at: A(at), until: i + 1 < CAPS.length ? A(CAPS[i + 1][0]) : A(VO_END) + 5, text }))}
         style={{ bottom: '21.5%', left: '9%', right: '12%', font: `600 50px ${FONT}`, color: C.ink, textShadow: 'none', lineHeight: 1.2, textWrap: 'balance' }} />}
       {SHOT_T0.map(([nm], i) => (
-        <video key={i} ref={(el) => { vrefs.current[i] = el; }} src={`audio/vo-${String(i + 1).padStart(2, '0')}.wav`} preload="auto" playsInline
-          data-om-exportable-video-play-start={String(CUES[nm])} data-om-exportable-video-play-end={String(CUES[nm] + SHOT_DUR[i])}
+        <video key={i} ref={(el) => { vrefs.current[i] = el; }} src={`audio/sfx-${String(i + 1).padStart(2, '0')}.wav`} preload="auto" playsInline
+          data-om-exportable-video-play-start={String(CUES[nm])} data-om-exportable-video-play-end={String(CUES[nm] + SHOT_DUR[i] + SFX_TAIL)}
           style={{ position: 'absolute', left: 0, top: 0, width: 2, height: 2, opacity: 0, pointerEvents: 'none' }} />
       ))}
     </div>
@@ -841,9 +843,9 @@ function BooksAreSlow() {
       <CompositionStage width={1080} height={1920} scenes={window.OM_SCENES} playback={window.OM_PLAYBACK} bg={C.paper}>
         <Film tw={t} onBlocked={setBlocked} />
       </CompositionStage>
-      {blocked && <button onClick={() => { const v = window.__basVO; if (v) v.play().then(() => setBlocked(false)).catch(() => {}); }}
+      {blocked && <button onClick={() => { const v = window.__basSFX; if (v) v.play().then(() => setBlocked(false)).catch(() => {}); }}
         style={{ position: 'fixed', top: 12, left: 12, zIndex: 50, font: `600 14px ${FONT}`, color: C.card, background: C.cyan, border: 0, borderRadius: 2, padding: '8px 14px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-        Turn on voiceover
+        Turn on sound
       </button>}
       <TweaksPanel>
         <TweakSection label="Playback" />
